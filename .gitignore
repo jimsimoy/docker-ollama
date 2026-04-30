@@ -1,0 +1,3 @@
+.env
+ollama_data/*
+!ollama_data/.gitkeep

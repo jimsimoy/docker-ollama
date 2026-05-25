@@ -1,6 +1,6 @@
 # Docker Ollama
 
-> **Author:** Ivan Simoy  
+> **Author:** Jan Ivan Simoy
 > *Powered by AI*
 
 Ollama running in Docker with a configurable default model (see `.env`).
@@ -16,18 +16,23 @@ Ollama running in Docker with a configurable default model (see `.env`).
 
 ### API Key Authentication
 
-Ollama supports a built-in API key via `OLLAMA_API_KEY`. When set, every request must include an `Authorization: Bearer` header — unauthenticated requests are rejected with `401`.
+Public access is secured at the reverse-proxy layer (Nginx Proxy Manager), not by `docker-ollama` runtime auth in this setup.
+
+NPM proxy host `ollama.jan-ivan-simoy.dev` uses an auth gate in Advanced config:
+
+```nginx
+if ($http_authorization != "Bearer <your-key>") { return 401; }
+```
+
+Requests without a matching bearer token are rejected with `401` before they reach Ollama.
 
 **Generate a key:**
 ```bash
 ./generate-api-key.sh
 ```
 
-The script writes the key directly into `.env` and prints the value. Restart the container to apply:
-
-```bash
-docker-compose down && docker-compose up -d
-```
+The script writes the key directly into `.env` and prints the value.
+In this deployment, `OLLAMA_API_KEY` in `.env` is the canonical token reference used by the NPM auth gate.
 
 **Use the key in requests:**
 ```bash
@@ -52,10 +57,10 @@ client = OpenAI(
 |---|---|
 | `OLLAMA_HOST_BIND=127.0.0.1` (local only) | Optional — no external access |
 | Exposed to LAN (`0.0.0.0`) | Strongly recommended |
-| Behind a reverse proxy (nginx, Caddy) | Strongly recommended |
+| Behind reverse proxy with auth gate | Required for public requests |
 | Exposed to the internet | Required |
 
-> The API key is stored only in `.env` which is gitignored and never committed.
+> The API key is stored in `.env` (gitignored). If you rotate the key in `.env`, update the NPM auth gate value to match.
 
 ---
 

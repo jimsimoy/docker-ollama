@@ -1,14 +1,66 @@
 # Docker Ollama
 
-> **Author:** Jan Ivan Simoy
-> *Powered by AI*
+<div align="center">
 
-Ollama running in Docker with a configurable default model (see `.env`).
+<img src="https://img.shields.io/badge/docker-compose-2496ED.svg?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose">
+<a href="https://github.com/jimsimoy/docker-ollama/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License: MIT"></a>
 
-- Host port: configured via `OLLAMA_HOST_PORT` in `.env` (default Ollama port `11434` changed)
-- API bound to `OLLAMA_HOST_BIND` in `.env` — set to `127.0.0.1` by default, not publicly exposed
-- Model data stored in `./ollama_data/`
-- Model auto-pulled on container start via `entrypoint.sh`
+**Ollama running in Docker with a configurable default model, a bearer-token auth gate, and support for both local and cloud models.**
+
+by [Jan Ivan Simoy](https://github.com/jimsimoy)
+
+</div>
+
+---
+
+## What is this?
+
+A production-ready Docker Compose setup for self-hosting [Ollama](https://ollama.com) — an OpenAI-compatible LLM server. It's built for running behind a reverse proxy with a real auth gate rather than exposed raw, and supports switching between locally-run models and Ollama's cloud models (inference on Ollama's servers, no local GPU needed) via one `.env` variable.
+
+---
+
+## Features
+
+| Feature | Detail |
+|---|---|
+| Configurable host port/bind | `OLLAMA_HOST_PORT` / `OLLAMA_HOST_BIND` in `.env` — bound to `127.0.0.1` by default, not publicly exposed |
+| Model auto-pull | Default model in `.env` is pulled automatically on container start via `entrypoint.sh` |
+| Cloud + local models | Switch with one `.env` variable — cloud models need no local GPU |
+| API key auth | Generated with `generate-api-key.sh`, enforced at the reverse-proxy layer |
+| Resource limits | CPU memory cap and GPU support (NVIDIA) both configurable |
+| Health checks | Built into `docker-compose.yml` |
+
+---
+
+## Requirements
+
+| Requirement | Notes |
+|---|---|
+| Docker + Docker Compose | Tested with the `version: '3.8'` compose syntax |
+| Reverse proxy (recommended) | e.g. Nginx Proxy Manager, for the auth gate described below |
+| NVIDIA driver + `nvidia-container-toolkit` | Only if running local (non-cloud) models with GPU acceleration |
+
+---
+
+## Setup
+
+```bash
+# Copy and configure environment
+cp .env.example .env
+
+# Edit .env — set OLLAMA_HOST_PORT, OLLAMA_MODEL, etc.
+
+# Start the container (pulls configured model automatically)
+docker-compose up -d
+```
+
+### First-time sign-in (required for cloud models)
+
+```bash
+docker exec -it ollama ollama signin
+```
+
+Open the URL shown in the browser, log in with your Ollama account. Only needed once — credentials are stored in `./ollama_data/`.
 
 ---
 
@@ -16,9 +68,7 @@ Ollama running in Docker with a configurable default model (see `.env`).
 
 ### API Key Authentication
 
-Public access is secured at the reverse-proxy layer (Nginx Proxy Manager), not by `docker-ollama` runtime auth in this setup.
-
-NPM proxy host `ollama.jan-ivan-simoy.dev` uses an auth gate in Advanced config:
+Public access is secured at the reverse-proxy layer (e.g. Nginx Proxy Manager), not by `docker-ollama` runtime auth in this setup. A proxy host in front of this container uses an auth gate in its advanced config:
 
 ```nginx
 if ($http_authorization != "Bearer <your-key>") { return 401; }
@@ -31,8 +81,7 @@ Requests without a matching bearer token are rejected with `401` before they rea
 ./generate-api-key.sh
 ```
 
-The script writes the key directly into `.env` and prints the value.
-In this deployment, `OLLAMA_API_KEY` in `.env` is the canonical token reference used by the NPM auth gate.
+The script writes the key directly into `.env` and prints the value. `OLLAMA_API_KEY` in `.env` is the canonical token reference used by the proxy's auth gate.
 
 **Use the key in requests:**
 ```bash
@@ -60,29 +109,7 @@ client = OpenAI(
 | Behind reverse proxy with auth gate | Required for public requests |
 | Exposed to the internet | Required |
 
-> The API key is stored in `.env` (gitignored). If you rotate the key in `.env`, update the NPM auth gate value to match.
-
----
-
-## Setup
-
-```bash
-# Copy and configure environment
-cp .env.example .env
-
-# Edit .env — set OLLAMA_HOST_PORT, OLLAMA_MODEL, etc.
-
-# Start the container (pulls configured model automatically)
-docker-compose up -d
-```
-
-### First-time sign-in (required for cloud models)
-
-```bash
-docker exec -it ollama ollama signin
-```
-
-Open the URL shown in the browser, log in with your Ollama account. Only needed once — credentials are stored in `./ollama_data/`.
+> The API key is stored in `.env` (gitignored). If you rotate the key in `.env`, update the proxy's auth gate value to match.
 
 ---
 
@@ -214,7 +241,7 @@ Running a local model requires enough memory to hold the model weights. Without 
 | GPU VRAM | — | 20 GB+ (e.g. RTX 3090/4090, A100) |
 | RAM (CPU-only, no GPU) | 32 GB | 64 GB |
 
-If using a GPU, enable the NVIDIA GPU block in `docker-compose.yml` — see the GPU Support section below.
+If using a GPU, enable the NVIDIA GPU block in `docker-compose.yml` — see [GPU Support](#gpu-support-nvidia--local-models-only) below.
 
 **Available `qwen3.6` tags:**
 
@@ -250,3 +277,29 @@ And in `.env`, uncomment:
 ```
 NVIDIA_VISIBLE_DEVICES=all
 ```
+
+---
+
+## Project Structure
+
+```
+docker-compose.yml     # Service definition, resource limits, healthcheck
+entrypoint.sh           # Auto-pulls the configured model on container start
+generate-api-key.sh     # Generates and writes OLLAMA_API_KEY into .env
+pull-model.sh           # Pulls an additional model on demand
+.env.example            # Config template
+```
+
+---
+
+## License
+
+[MIT](./LICENSE) — free to use, modify, and distribute.
+
+---
+
+<div align="center">
+
+[Report a Bug](https://github.com/jimsimoy/docker-ollama/issues) · [Request a Feature](https://github.com/jimsimoy/docker-ollama/issues)
+
+</div>
